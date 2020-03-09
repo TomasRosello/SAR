@@ -28,8 +28,8 @@
 #define BAUD_1 38400 // velocidad de comunicación con la controladora
 #define VEL_MAX 40 // velocidad máxima (pulsos/T)
 
-int VELOC_IZQ=5; // velocidades deseadas para las ruedas (en pulsos/T)
-int VELOC_DER=5;
+int VELOC_IZQ=10; // velocidades deseadas para las ruedas (en pulsos/T)
+int VELOC_DER=10;
 
 float d=12.5; // Diámetro de ruedas en cm
 float D=46; // Distancia entre ruedas en cm
@@ -332,12 +332,17 @@ void Avanzar(int V_izq, int V_der)
 void Rotar(char sentido,int ang) // sentido ---> i: izquierdas; d: derechas
 {
   int err_izq, err_der, pos_i, pos_d, pos_r;
+  int threshold = 30;
   float factor;
   byte pot_izq, pot_der;
   long vel_izq_aux = 0;
   long vel_der_aux = 0;
   
-  float kp = 0.1;
+  long error_long_izq = 0;
+  long error_long_der = 0;
+  
+  float kp = 0.05;
+  float ki = 0.0001;
 
   factor = (PPV * D) / (360 * d);
 
@@ -345,27 +350,29 @@ void Rotar(char sentido,int ang) // sentido ---> i: izquierdas; d: derechas
   pos_d = 0;
   pos_r = (int) (factor * ang);
 
-
-  if(sentido == i)
+  if(sentido == 'i')
   {
-    while ((pos_i > -pos_r) && (pos_d < pos_r))
-    {
+    do{
       err_der = pos_r - pos_d;
-      err_izq = pos_r - pos_i;
+      err_izq = -pos_r - pos_i;
+
+      error_long_izq += err_izq;
+      error_long_der += err_der;
       
-      pot_der = BASE_POT + kp * err_der;
-      pot_izq = BASE_POT - kp * err_izq;
+      pot_der = BASE_POT + (kp * err_der) + (ki * error_long_der);
+      pot_izq = BASE_POT + (kp * err_izq) + (ki * error_long_izq);
       
       PonerPotencia(MOTOR_RIGHT,pot_der);
       PonerPotencia(MOTOR_LEFT,pot_izq);
 
-      LeerVelocidad(vel_der_aux);
-      LeerVelocidad(vel_izq_aux);
+      vel_izq_aux = LeerVelocidades(vel_der_aux);
       
-      pos_d += vel_der_aux;
-      pos_i += vel_izq_aux;
-    }
+      pos_d = vel_der_aux;
+      pos_i = vel_izq_aux;
 
+      Serial.println(pos_d);
+    }
+    while(pos_r-pos_d > threshold || -pos_r-pos_i < -threshold);
   }
   
 }
@@ -383,6 +390,9 @@ void ProcesarSensores()
 //**********************************************************************
 void loop()
 {
-  Avanzar(VELOC_IZQ,VELOC_DER);
-  delay(RETARDO);
+  for(int i=0; i < 100; i++){
+    Avanzar(20,20);
+    delay(RETARDO);
+  }
+  Rotar('i',90);
 }
